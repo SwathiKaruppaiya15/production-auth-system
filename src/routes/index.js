@@ -15,3 +15,14 @@ router.get("/db-test", async (req, res) => {
 });
 
 module.exports = router;
+
+
+const authRoutes = require("./auth.routes");
+
+router.use("/auth", authRoutes);
+
+router.get("/test", (req, res) => {
+  res.json({ message: "Routes working" });
+});
+
+module.exports = router;
