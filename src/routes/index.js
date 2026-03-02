@@ -1,4 +1,7 @@
 const express = require("express");
+const authRoutes = require("./auth.routes");
+const adminRoutes = require("./admin.routes");
+const userRoutes = require("./user.routes");
 
 const router = express.Router();
 
@@ -14,15 +17,9 @@ router.get("/db-test", async (req, res) => {
   res.json(result.rows);
 });
 
-module.exports = router;
-
-
-const authRoutes = require("./auth.routes");
-
+// Route modules
 router.use("/auth", authRoutes);
-
-router.get("/test", (req, res) => {
-  res.json({ message: "Routes working" });
-});
+router.use("/admin", adminRoutes);
+router.use("/users", userRoutes);
 
 module.exports = router;

@@ -1,21 +1,35 @@
-const express = require('express'); // for import express
-const cookieParser = require('cookie-parser'); // for import cookie-parser
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const helmet = require('./config/helmet.config');
+const cors = require('./config/cors.config');
+const errorHandler = require('./middleware/error.middleware');
+const { generalRateLimit } = require('./middleware/rateLimit.middleware');
 
-const routes = require('./routes'); // for import routes, this file contains all the routes
-const app = express(); // exp instance
+const routes = require('./routes');
+const app = express();
 
-//middleware
-app.use(express.json());
+// Security middleware
+app.use(helmet);
+app.use(cors);
+app.use(generalRateLimit);
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-//routes
+// Routes
 app.use('/api', routes);
 
-app.get('/health', (req,res) => {
-    res.status(200).json({
-        status : 'success',
-        message : 'Server is running'
-    })
-})
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Server is running'
+  });
+});
+
+// Global error handler (must be last)
+app.use(errorHandler);
 
 module.exports = app;
