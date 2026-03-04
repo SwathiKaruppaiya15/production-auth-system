@@ -139,3 +139,100 @@ exports.deleteUser = async (id) => {
   const result = await pool.query(query, [id]);
   return result.rows[0];
 };
+
+/*
+Store email verification token
+*/
+exports.setVerificationToken = async (email, hashedToken, expiresAt) => {
+  const query = `
+    UPDATE users 
+    SET verification_token = $2, 
+        verification_expires_at = $3
+    WHERE email = $1
+    RETURNING id, email
+  `;
+
+  const result = await pool.query(query, [email, hashedToken, expiresAt]);
+  return result.rows[0];
+};
+
+/*
+Verify email using token
+*/
+exports.verifyEmail = async (hashedToken) => {
+  const query = `
+    UPDATE users 
+    SET is_verified = true,
+        verification_token = NULL,
+        verification_expires_at = NULL
+    WHERE verification_token = $1 
+      AND verification_expires_at > NOW()
+    RETURNING id, email, is_verified
+  `;
+
+  const result = await pool.query(query, [hashedToken]);
+  return result.rows[0];
+};
+
+/*
+Store password reset token
+*/
+exports.setPasswordResetToken = async (email, hashedToken, expiresAt) => {
+  const query = `
+    UPDATE users 
+    SET reset_token = $2, 
+        reset_token_expires_at = $3
+    WHERE email = $1
+    RETURNING id, email
+  `;
+
+  const result = await pool.query(query, [email, hashedToken, expiresAt]);
+  return result.rows[0];
+};
+
+/*
+Find user by password reset token
+*/
+exports.findByResetToken = async (hashedToken) => {
+  const query = `
+    SELECT id, email, reset_token_expires_at 
+    FROM users 
+    WHERE reset_token = $1 
+      AND reset_token_expires_at > NOW()
+  `;
+
+  const result = await pool.query(query, [hashedToken]);
+  return result.rows[0];
+};
+
+/*
+Update password and clear reset token
+*/
+exports.updatePasswordAndClearResetToken = async (userId, hashedPassword) => {
+  const query = `
+    UPDATE users 
+    SET password = $2,
+        reset_token = NULL,
+        reset_token_expires_at = NULL
+    WHERE id = $1
+    RETURNING id, email
+  `;
+
+  const result = await pool.query(query, [userId, hashedPassword]);
+  return result.rows[0];
+};
+
+/*
+Find user by verification token
+*/
+exports.findByVerificationToken = async (hashedToken) => {
+  const query = `
+    SELECT id, email, verification_expires_at 
+    FROM users 
+    WHERE verification_token = $1 
+      AND verification_expires_at > NOW()
+  `;
+
+  const result = await pool.query(query, [hashedToken]);
+  return result.rows[0];
+};

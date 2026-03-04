@@ -4,6 +4,8 @@ const refreshTokenModel = require("../models/refresh-token.model");
 const hashUtil = require("../utils/hash");
 const jwtUtil = require("../utils/jwt");
 const tokenService = require("./token.service");
+const emailService = require("./email.service");
+const tokenUtil = require("../utils/token.util");
 
 /*
 Signup service
@@ -24,7 +26,24 @@ exports.signup = async ({ email, password }) => {
     password: hashedPassword
   });
 
-  return newUser;
+  // Generate and store verification token
+  const { token: verificationToken, expiresAt } = tokenUtil.generateVerificationToken();
+  const hashedVerificationToken = tokenUtil.hashToken(verificationToken);
+  
+  await userModel.setVerificationToken(email, hashedVerificationToken, expiresAt);
+  
+  // Send verification email
+  try {
+    await emailService.sendVerificationEmail(email, verificationToken);
+  } catch (emailError) {
+    console.error('Failed to send verification email:', emailError);
+    // Don't fail signup if email fails, but log it
+  }
+
+  return {
+    user: newUser,
+    message: "Account created successfully. Please check your email to verify your account."
+  };
 };
 
 /*
@@ -41,6 +60,11 @@ exports.login = async ({ email, password }) => {
 
   if (!user) {
     throw new Error("Invalid email or password");
+  }
+
+  // Check if email is verified
+  if (!user.is_verified) {
+    throw new Error("Please verify your email before logging in");
   }
 
   const isMatch = await hashUtil.comparePassword(
@@ -162,4 +186,75 @@ exports.logout = async (refreshToken) => {
     }
     throw error;
   }
+};
+
+/*
+Verify email service
+*/
+exports.verifyEmail = async (token) => {
+  const hashedToken = tokenUtil.hashToken(token);
+  
+  const verifiedUser = await userModel.verifyEmail(hashedToken);
+  
+  if (!verifiedUser) {
+    throw new Error("Invalid or expired verification token");
+  }
+
+  return {
+    message: "Email verified successfully",
+    user: {
+      id: verifiedUser.id,
+      email: verifiedUser.email,
+      is_verified: verifiedUser.is_verified
+    }
+  };
+};
+
+/*
+Forgot password service
+*/
+exports.forgotPassword = async (email) => {
+  const user = await userModel.findByEmail(email);
+  
+  // Always return success to prevent email enumeration
+  if (!user) {
+    return { message: "If an account with that email exists, a password reset link has been sent" };
+  }
+
+  const { token: resetToken, expiresAt } = tokenUtil.generatePasswordResetToken();
+  const hashedResetToken = tokenUtil.hashToken(resetToken);
+  
+  await userModel.setPasswordResetToken(email, hashedResetToken, expiresAt);
+  
+  try {
+    await emailService.sendPasswordResetEmail(email, resetToken);
+  } catch (emailError) {
+    console.error('Failed to send password reset email:', emailError);
+    // Don't reveal error to user
+  }
+
+  return { message: "If an account with that email exists, a password reset link has been sent" };
+};
+
+/*
+Reset password service
+*/
+exports.resetPassword = async (token, newPassword) => {
+  const hashedToken = tokenUtil.hashToken(token);
+  
+  const user = await userModel.findByResetToken(hashedToken);
+  
+  if (!user) {
+    throw new Error("Invalid or expired reset token");
+  }
+
+  const hashedPassword = await hashUtil.hashPassword(newPassword);
+  
+  // Update password and clear reset token
+  await userModel.updatePasswordAndClearResetToken(user.id, hashedPassword);
+  
+  // Invalidate all refresh tokens for this user
+  await refreshTokenModel.deleteAllUserRefreshTokens(user.id);
+
+  return { message: "Password reset successfully" };
 };

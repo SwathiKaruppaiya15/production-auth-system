@@ -6,20 +6,23 @@ exports.signup = async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({
+        success: false,
         message: "Email and password required"
       });
     }
 
-    const user = await authService.signup({ email, password });
+    const result = await authService.signup({ email, password });
 
     res.status(201).json({
-      message: "User created successfully",
-      user
+      success: true,
+      message: result.message,
+      user: result.user
     });
 
   } catch (err) {
     res.status(400).json({
-      error: err.message
+      success: false,
+      message: err.message
     });
   }
 };
